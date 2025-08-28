@@ -96,6 +96,9 @@ conda activate me5400-project
 pip install -r req-yolo.txt --constraint constraints.txt
 ```
 
+* YOLO compatability:
+    - ROS Noetic uses `numpy<=1.20`, however only YOLO models up to YOLO**v8**.
+
 
 ## Orbbec ROS 1 SDK
 This was developed using an **Orbbec Gemini 335**, so the **Orbbec SDK for ROS 1** was used. The following are the summarized [setup instructions](https://github.com/orbbec/OrbbecSDK_ROS1), and assume the appropriate **ROS** setup:
