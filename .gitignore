@@ -1,3 +1,9 @@
+# === Ignore pre-trained models ===
+**.pt
+**.pth
+!pretrained/**
+
+# === Default GitHub .gitignore for Python ===
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
