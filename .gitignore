@@ -3,6 +3,9 @@
 **.pth
 !pretrained/**
 
+# Also any files/directories starting with . unless specified
+.**
+
 # === Default GitHub .gitignore for Python ===
 # Byte-compiled / optimized / DLL files
 __pycache__/
