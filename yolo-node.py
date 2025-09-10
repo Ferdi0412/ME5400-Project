@@ -1,6 +1,7 @@
 import signal, argparse, sys, threading, math
 
 import cv2
+import numpy as np
 from cv_bridge import CvBridge
 from ultralytics import YOLO
 
@@ -99,6 +100,27 @@ def get_point_marker(kpts, marker_id):
     marker.pose.orientation.w = 1.
     return marker
 
+def get_slice(dimg, bbox, shape=None):
+    if shape:
+        if isinstance(shape, int):
+            shape = (shape, shape)
+        x_min, x_max = bbox[0] - shape[0], bbox[0] + shape[0]
+        x_min, x_max = bbox[0] - shape[0], bbox[0] + shape[0]
+        y_min, y_max = bbox[1] - shape[1], bbox[1] + shape[1]
+    else:
+        x_min, y_min, x_max, y_max = bbox
+
+    if x_min < 0:             x_min = 0
+    if y_min < 0:             y_min = 0
+    if x_max > dimg.shape[0]: x_max = dimg.shape[1] + 1
+    if y_max > dimg.shape[1]: y_max = dimg.shape[1] + 1
+    # print(f"Taking slice from {x_min}, {y_min} to {x_max}, {y_max}")
+    return dimg[y_min: y_max, x_min: x_max]
+
+def project_point(dimg, u, v):
+    roi = get_slice(dimg, (u, v), 25)
+    return np.mean(roi[np.where(roi != 0.)])
+
 # Pinhole camera model
 def get_pinhole_xy(cam_info, u, v, z, /):
     K  = cam_info.K
@@ -112,12 +134,14 @@ def get_pinhole_xy(cam_info, u, v, z, /):
 
 # NOTE - PoseEst2D assumes for every image_raw received, a corresponding camera_info is received
 class PoseEst2D:
-    def __init__(self, bridge, *, sub="/camera", pub="/yolo", model="yolov8m-pose.pt", preview=False, simple=False):
+    def __init__(self, bridge, *, sub="/camera", pub="/yolo", model="yolov8m-pose.pt", preview=False, simple=False, cpu_only=False):
         if not "-pose.pt" in model:
             raise ValueError("Model must be pre-trained and of type '-pose'!")
         self.lock    = threading.Lock()
         self.bridge  = bridge
         self.pose_model   = YOLO(model)
+        if cpu_only:
+            self.pose_model = self.pose_model.to('cpu')
         self.preview = preview
         self.simple  = simple
         self.img_sub = rospy.Subscriber(f"{sub}/color/image_raw",
@@ -163,7 +187,7 @@ class PoseEst2D:
         self.camera_info = data
         self.pub()
 
-    def pub(self):
+    def pub(self, threshold = 0.25):
         with self.lock:
             if self.results is not None \
             and self.frame_id is not None \
@@ -175,7 +199,7 @@ class PoseEst2D:
                 self.img_pub.publish(img)
                 if self.camera_info.header is not None:
                     self.info_pub.publish(self.camera_info)
-                if self.simple:
+                if not self.simple:
                     # 2) Project points onto depth map
                     markers = MarkerArray()
                     for result in self.results:
@@ -183,14 +207,36 @@ class PoseEst2D:
                             continue
                         kpts     = []
                         for person in range(result.keypoints.data.shape[0]):
+                           # Step 1 if hips and shoulders present, use them to calculate "depth"
+                           depths_main = []
+                           depths_sec  = []
                            for row in range(result.keypoints.data.shape[1]):
                                u_raw, v_raw, conf = result.keypoints.data[person, row]
-                               if u_raw != 0. and v_raw != 0.:
+                            #    print(conf)
+                               if conf.item() > threshold:
                                     u, v = int(u_raw), int(v_raw)
-                                    d = self.depth[v, u] / 1000.0
-                                    kpts.append([*get_pinhole_xy(self.camera_info, u, v, d), d])
+                                    # d = self.depth[v, u] / 1000.0
+                                    # print(f"Row {row}")
+                                    d = project_point(self.depth, u, v) / 1000.
+                                    if row in [5, 6, 11, 12]:
+                                        depths_main.append(d)
+                                    else:
+                                        depths_sec.append(d)
+                                    kpts.append([(u - self.results[0].orig_shape[1] // 2) / 1000.,
+                                                 (v - self.results[0].orig_shape[0] // 2) / 1000.,
+                                                 0.])
+                                    # kpts.append([*get_pinhole_xy(self.camera_info, u/1000., v/1000., 0), d])
                                else:
                                     kpts.append(None)
+                           if len(kpts) > 0:
+                                d = 0.
+                                if depths_main:
+                                    d = np.mean(depths_main)
+                                elif depths_sec:
+                                    d = np.mean(depths_sec)
+                                for row in range(len(kpts)):
+                                    if kpts[row] is not None:
+                                        kpts[row][2] = d
                         kpt_markers  = get_point_marker(kpts, 2*person)
                         limb_markers = get_limb_marker(kpts, 2*person+1)
                         kpt_markers.header.frame_id = self.frame_id
@@ -223,6 +269,9 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--simple",
                         action="store_true",
                         help="Set this flag to only produce the 2D preview.")    
+    parser.add_argument("-c", "--cpu",
+                        action="store_true",
+                        help="Set this flag to only load model using CPU.")
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, kill_loop)
@@ -230,6 +279,6 @@ if __name__ == "__main__":
     rospy.init_node("yolo")
     bridge = CvBridge()
 
-    hpe = PoseEst2D(bridge, preview=args.preview, sub=f"{args.topic}", model=f"{args.model}-pose.pt", simple=args.simple)
+    hpe = PoseEst2D(bridge, preview=args.preview, sub=f"{args.topic}", model=f"{args.model}-pose.pt", simple=args.simple, cpu_only=args.cpu)
 
     rospy.spin()
