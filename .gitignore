@@ -1,3 +1,5 @@
+ros-source.sh
+
 # === Ignore pre-trained models ===
 **.pt
 **.pth
