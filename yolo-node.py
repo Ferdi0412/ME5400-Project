@@ -1,3 +1,5 @@
+# export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1
+
 import signal, argparse, sys, threading, math
 
 import cv2
@@ -171,6 +173,7 @@ class PoseEst2D:
         self.camera_info = None
 
     def depth_cb(self, data):
+        print("Depth")
         self.depth = ros_numpy.numpify(data)
 
     def img_cb(self, data):
