@@ -173,7 +173,7 @@ class PoseEst2D:
         self.camera_info = None
 
     def depth_cb(self, data):
-        print("Depth")
+        # print("Depth")
         self.depth = ros_numpy.numpify(data)
 
     def img_cb(self, data):
@@ -196,8 +196,9 @@ class PoseEst2D:
             and self.frame_id is not None \
             and self.camera_info is not None \
             and self.depth is not None:
+                print("Publishing")
                 # 1) HPE using YOLO - publish result
-                img = self.bridge.cv2_to_imgmsg(self.results[0].plot())
+                img = self.bridge.cv2_to_imgmsg(self.results[0].plot(), encoding="bgr8")
                 img.header.frame_id = self.frame_id
                 self.img_pub.publish(img)
                 if self.camera_info.header is not None:
@@ -257,6 +258,7 @@ def kill_loop(sig, frame):
 
 # === Main ===
 if __name__ == "__main__":
+    print("Starting...")
     parser = argparse.ArgumentParser("Create an ROS node to publish human pose estimation results using YOLO models.")
     parser.add_argument("-t", "--topic",
                         type=str,
@@ -264,7 +266,7 @@ if __name__ == "__main__":
                         help="The topic root for the RGB-D camera.")
     parser.add_argument("-m", "--model",
                         type=str,
-                        default="yolov8m",
+                        default="yolov8n",
                         help="The version/generation of YOLO models to use.")
     parser.add_argument("-p", "--preview",
                         action="store_true",
