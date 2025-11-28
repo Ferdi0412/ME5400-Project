@@ -20,7 +20,7 @@ export ROS_IP=$MY_IP
 export ROS_MASTER_URI=http://$MY_IP:11311
 
 # Setup ros-source.sh
-echo -e "export ROS_MASTER_URI=http://${MY_IP}:11311" >> orbbec-source.sh
+echo -e "export ROS_MASTER_URI=http://${MY_IP}:11311" > orbbec-source.sh
 echo -e "export ROS_IP=ROS_IP=\$(hostname -I | awk '{print \$1}')" >> orbbec-source.sh
 
 # Setup start-orbbec.sh
