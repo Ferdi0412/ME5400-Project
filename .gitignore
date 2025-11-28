@@ -1,4 +1,4 @@
-ros-source.sh
+orbbec-source.sh
 
 # === Ignore pre-trained models ===
 **.pt
